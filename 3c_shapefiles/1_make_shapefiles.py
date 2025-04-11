@@ -5,12 +5,12 @@
 from pathlib import Path
 from shutil import copyfile
 from geopandas import gpd
-from rasterstats import point_query
 import pandas as pd
 import xarray as xr
-import numpy as np 
 from datetime import datetime
-from shapely.geometry import Point
+from shapely.geometry import Point, LineString, MultiLineString
+import numpy as np
+from rasterio import open as rio_open
 
 
 # --- Control file handling
@@ -112,6 +112,19 @@ shp_river_basin = shp_river_basin.assign(hru_to_seg = shp_river_basin['COMID'])
 
 shp_river_network_ini = gpd.read_file( shapefiles_path / river_file_name )
 
+# Fix the issue of multilinestring (e.g. due to loop in the river)
+def flatten_multilinestring(geom):
+    if isinstance(geom, LineString):
+        return geom
+    elif isinstance(geom, MultiLineString):
+        # Flatten all segments into one big coordinate list
+        coords = []
+        for line in geom.geoms:
+           coords.extend(line.coords)
+        return LineString(coords)
+    else:
+        return geom
+
 # Correction step for splitted catchments
 def fixed_shp(shp_river_network):
     # Make a copy of the original dataframe
@@ -141,6 +154,7 @@ def fixed_shp(shp_river_network):
     return shp_river_network_fixed
 
 shp_river_network = fixed_shp(shp_river_network_ini)
+shp_river_network["geometry"] = shp_river_network["geometry"].apply(flatten_multilinestring)
 
 # Get slope information when NA values are encoutnered (splitted catchments)
 
@@ -148,13 +162,25 @@ dem_path = CAMELS_spath / 'geospatial' / category_value / 'merit' / domainName
 dem_file_name = domainName + '_merit_hydro_elv.tif'
 dem_file = dem_path / dem_file_name
 
-start_points = [Point(geom.coords[0]) for geom in shp_river_network.geometry]
-start_gdf = gpd.GeoDataFrame(geometry=start_points, crs=shp_river_network.crs)
-elev_start = point_query(start_gdf, dem_file)
+# Fix the issue of the last point of the river that finishes outside of the elevation
+def get_valid_point(geom, raster, max_attempts=5):
+    coords = list(geom.coords)
+    for i in range(min(len(coords), max_attempts)):
+        x, y = coords[i]
+        val = list(raster.sample([(x, y)]))[0][0]
+        if val != raster.nodata:
+            return Point(x, y)
+    return None
 
-end_points = [Point(geom.coords[-1]) for geom in shp_river_network.geometry]
-end_gdf = gpd.GeoDataFrame(geometry=end_points, crs=shp_river_network.crs)
-elev_end = point_query(end_gdf, dem_file)
+
+with rio_open(dem_file) as dem:
+    start_points = [get_valid_point(geom, dem) for geom in shp_river_network.geometry]
+    start_gdf = gpd.GeoDataFrame(geometry=start_points, crs=shp_river_network.crs)
+    elev_start = [list(dem.sample([(pt.x, pt.y)]))[0][0] if pt is not None else None for pt in start_gdf.geometry]
+    end_points = [Point(geom.coords[-1]) for geom in shp_river_network.geometry]
+    end_gdf = gpd.GeoDataFrame(geometry=end_points, crs=shp_river_network.crs)
+    elev_end = [list(dem.sample([(pt.x, pt.y)]))[0][0] for pt in end_gdf.geometry]
+
 
 elev_start_array = np.array(elev_start)
 elev_end_array = np.array(elev_end)
