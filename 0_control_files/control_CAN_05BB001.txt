@@ -52,7 +52,7 @@ exe_name_mizuroute          | mizuroute.exe                               # Name
 
 # Forcing settings
 forcing_raw_time            | 2000,2020                                   # Years to download: Jan-[from],Dec-[to].
-forcing_data_name           | era5                                        # era5 or rdrs.
+forcing_data_name           | era5                                        # era5, rdrs or em-earth.
 forcing_time_step_size      | 3600                                        # Size of the forcing time step in [s]. Must be constant.
 forcing_measurement_height  | 3                                           # Reference height for forcing measurements [m].
 forcing_summa_path          | default                                     # If 'default', uses 'root_path/domain_[name]/forcing/4_SUMMA_input'.

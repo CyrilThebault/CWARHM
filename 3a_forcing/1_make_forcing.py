@@ -122,7 +122,9 @@ if sim_end == 'default':
     
 
 forcing_file = domainName + "_" + forcing_name + "_" + spa +".nc"
-
+if forcing_name == "em-earth":
+    forcing_file = forcing_file.replace(forcing_name, "em_earth")
+    
 
 
 # --- Find where the forcing data will be
@@ -178,8 +180,22 @@ def to_datetime(dates):
 # open forcing .nc file available in CAMELS-spat
 nc_forcing = xr.open_dataset(forcing_path / forcing_file)
 
-if forcing_name =="daymet":
-    nc_forcing = nc_forcing.assign(tmean=(nc_forcing["tmin"] + nc_forcing["tmax"]) / 2)
+        
+
+# create a backup to fill variables other than P & T with era5 data
+if forcing_name == "em-earth":
+    backup_forcing_path =  Path(str(forcing_path).replace(forcing_name, "era5"))
+    backup_forcing_file = forcing_file.replace("em_earth", "era5")
+    backup_nc_forcing = xr.open_dataset(backup_forcing_path / backup_forcing_file)
+
+    # Find the common timestamps
+    common_times = np.intersect1d(nc_forcing['time'].values, backup_nc_forcing['time'].values)
+    
+    # Subset both datasets to the common times
+    nc_forcing = nc_forcing.sel(time=common_times)
+    backup_nc_forcing = backup_nc_forcing.sel(time=common_times)
+
+
 
 # name of the output forcing .nc file for SUMMA
 forcing_summa_name = forcing_file    
@@ -197,28 +213,25 @@ variable_mapping = {
     },
     "shortwave_radiation": {
         "era5": "msdwswrf",
-        "daymet": "srad",
         "rdrs": "RDRS_v2.1_P_FB_SFC"
     },
     "precipitation": {
         "era5": "mtpr",
-        "daymet": "prcp",
         "rdrs": "RDRS_v2.1_A_PR0_SFC",
-        "em_earth": "prcp",
+        "em-earth": "prcp",
     },
     "air_temperature": {
         "era5": "t",
-        "daymet": "tmean",  # Daymet has tmax and tmin
         "rdrs": "RDRS_v2.1_P_TT_1.5m",
-        "em_earth": "tmean",
+        "em-earth": "tmean",
     },
     "windspeed": {
         "era5": "w",
-        "rdrs": "RDRS_v2.1_P_UVC_10m",  # U and V components
+        "rdrs": "RDRS_v2.1_P_UVC_10m",  
     },
     "specific_humidity": {
         "era5": "q",
-        "rdrs": "RDRS_v2.1_P_HU_1.5m",  # Relative humidity
+        "rdrs": "RDRS_v2.1_P_HU_1.5m",  
     },
 }
 
@@ -280,90 +293,125 @@ with nc4.Dataset(forcing_summa_path/forcing_summa_name, 'w', format='NETCDF4') a
                            nc_forcing['hruId'].attrs['long_name'], \
                            nc_forcing['hruId'].attrs['units'])
     
-    
+    # Air pressure
+    nc_forcing_tmp = nc_forcing
     airpres_var = variable_mapping["air_pressure"].get(forcing_name)
-    if airpres_var is not None:
-        create_and_fill_nc_var(ncid, 'airpres', \
-                               nc_forcing[airpres_var].encoding['dtype'], \
-                               ('time','hru',), \
-                               nc_forcing[airpres_var].encoding['_FillValue'], \
-                               nc_forcing[airpres_var].values.astype(float), \
-                               nc_forcing[airpres_var].attrs['long_name'], \
-                               nc_forcing[airpres_var].attrs['units'])
-    else:
-        print(f"Warning: Air pressure data not available for {forcing_name}. Skipping...")
-    
-    longwave_radiation = variable_mapping["longwave_radiation"].get(forcing_name)    
-    if airpres_var is not None:
-        create_and_fill_nc_var(ncid, 'LWRadAtm', \
-                               nc_forcing[longwave_radiation].encoding['dtype'], \
-                               ('time','hru',), \
-                               nc_forcing[longwave_radiation].encoding['_FillValue'], \
-                               nc_forcing[longwave_radiation].values.astype(float), \
-                               nc_forcing[longwave_radiation].attrs['long_name'], \
-                               nc_forcing[longwave_radiation].attrs['units'])
-    else:
-        print(f"Warning: Long-wave radiation data not available for {forcing_name}. Skipping...")
-            
-    shortwave_radiation = variable_mapping["shortwave_radiation"].get(forcing_name)     
-    if airpres_var is not None:
-        create_and_fill_nc_var(ncid, 'SWRadAtm', \
-                               nc_forcing[shortwave_radiation].encoding['dtype'], \
-                               ('time','hru',), \
-                               nc_forcing[shortwave_radiation].encoding['_FillValue'], \
-                               nc_forcing[shortwave_radiation].values.astype(float), \
-                               nc_forcing[shortwave_radiation].attrs['long_name'], \
-                               nc_forcing[shortwave_radiation].attrs['units'])
-    else:
-        print(f"Warning: Short-wave radiation data not available for {forcing_name}. Skipping...")            
-            
-    precipitation = variable_mapping["precipitation"].get(forcing_name)  
-    if airpres_var is not None:      
-        create_and_fill_nc_var(ncid, 'pptrate', \
-                               nc_forcing[precipitation].encoding['dtype'], \
-                               ('time','hru',), \
-                               nc_forcing[precipitation].encoding['_FillValue'], \
-                               nc_forcing[precipitation].values.astype(float), \
-                               nc_forcing[precipitation].attrs['long_name'], \
-                               nc_forcing[precipitation].attrs['units'])
-    else:
-        print(f"Warning: Precipitation data not available for {forcing_name}. Skipping...")            
-            
-    air_temperature = variable_mapping["air_temperature"].get(forcing_name) 
-    if airpres_var is not None:
-        create_and_fill_nc_var(ncid, 'airtemp', \
-                               nc_forcing[air_temperature].encoding['dtype'], \
-                               ('time','hru',), \
-                               nc_forcing[air_temperature].encoding['_FillValue'], \
-                               nc_forcing[air_temperature].values.astype(float), \
-                               nc_forcing[air_temperature].attrs['long_name'], \
-                               nc_forcing[air_temperature].attrs['units'])
-    else:
-        print(f"Warning: Air temperature data not available for {forcing_name}. Skipping...")
-            
-    specific_humidity = variable_mapping["specific_humidity"].get(forcing_name)   
-    if airpres_var is not None:
-        create_and_fill_nc_var(ncid, 'spechum', \
-                               nc_forcing[specific_humidity].encoding['dtype'], \
-                               ('time','hru',), \
-                               nc_forcing[specific_humidity].encoding['_FillValue'], \
-                               nc_forcing[specific_humidity].values.astype(float), \
-                               nc_forcing[specific_humidity].attrs['long_name'], \
-                               nc_forcing[specific_humidity].attrs['units'])
-    else:
-        print(f"Warning: Specific humidity data not available for {forcing_name}. Skipping...")            
+    if airpres_var is None:
+        print(f"Warning: Air pressure data not available for {forcing_name}. Using era5 instead.")
+        nc_forcing_tmp = backup_nc_forcing
+        airpres_var = variable_mapping["air_pressure"].get("era5")
+        
+    create_and_fill_nc_var(ncid, 'airpres', \
+                           nc_forcing_tmp[airpres_var].encoding['dtype'], \
+                           ('time','hru',), \
+                           nc_forcing_tmp[airpres_var].encoding['_FillValue'], \
+                           nc_forcing_tmp[airpres_var].values.astype(float), \
+                           nc_forcing_tmp[airpres_var].attrs['long_name'], \
+                           nc_forcing_tmp[airpres_var].attrs['units'])    
 
+    
+    # Long-wave radiation
+    nc_forcing_tmp = nc_forcing
+    longwave_radiation = variable_mapping["longwave_radiation"].get(forcing_name)    
+    if longwave_radiation is None:
+        print(f"Warning: Long-wave radiation data not available for {forcing_name}. Using era5 instead.")
+        nc_forcing_tmp = backup_nc_forcing
+        longwave_radiation = variable_mapping["longwave_radiation"].get("era5")  
+        
+    create_and_fill_nc_var(ncid, 'LWRadAtm', \
+                           nc_forcing_tmp[longwave_radiation].encoding['dtype'], \
+                           ('time','hru',), \
+                           nc_forcing_tmp[longwave_radiation].encoding['_FillValue'], \
+                           nc_forcing_tmp[longwave_radiation].values.astype(float), \
+                           nc_forcing_tmp[longwave_radiation].attrs['long_name'], \
+                           nc_forcing_tmp[longwave_radiation].attrs['units'])
+
+
+    # Short-wave radiation   
+    nc_forcing_tmp = nc_forcing
+    shortwave_radiation = variable_mapping["shortwave_radiation"].get(forcing_name)     
+    if shortwave_radiation is None:
+        print(f"Warning: Short-wave radiation data not available for {forcing_name}. Using era5 instead.")
+        nc_forcing_tmp = backup_nc_forcing
+        shortwave_radiation = variable_mapping["shortwave_radiation"].get("era5")     
+
+    create_and_fill_nc_var(ncid, 'SWRadAtm', \
+                           nc_forcing_tmp[shortwave_radiation].encoding['dtype'], \
+                           ('time','hru',), \
+                           nc_forcing_tmp[shortwave_radiation].encoding['_FillValue'], \
+                           nc_forcing_tmp[shortwave_radiation].values.astype(float), \
+                           nc_forcing_tmp[shortwave_radiation].attrs['long_name'], \
+                           nc_forcing_tmp[shortwave_radiation].attrs['units'])
+                
+        
+    # Precipitation
+    nc_forcing_tmp = nc_forcing
+    precipitation = variable_mapping["precipitation"].get(forcing_name)  
+    if precipitation is None:  
+        print(f"Warning: Precipitation data not available for {forcing_name}. Using era5 instead.")
+        nc_forcing_tmp = backup_nc_forcing
+        precipitation = variable_mapping["precipitation"].get("era5")  
+        
+    create_and_fill_nc_var(ncid, 'pptrate', \
+                           nc_forcing_tmp[precipitation].encoding['dtype'], \
+                           ('time','hru',), \
+                           nc_forcing_tmp[precipitation].encoding['_FillValue'], \
+                           nc_forcing_tmp[precipitation].values.astype(float), \
+                           nc_forcing_tmp[precipitation].attrs['long_name'], \
+                           nc_forcing_tmp[precipitation].attrs['units'])        
+         
+        
+    # Air temperature
+    nc_forcing_tmp = nc_forcing
+    air_temperature = variable_mapping["air_temperature"].get(forcing_name) 
+    if air_temperature is None:
+        print(f"Warning: Air temperature data not available for {forcing_name}. Using era5 instead.")
+        nc_forcing_tmp = backup_nc_forcing
+        air_temperature = variable_mapping["air_temperature"].get("era5") 
+
+    create_and_fill_nc_var(ncid, 'airtemp', \
+                           nc_forcing_tmp[air_temperature].encoding['dtype'], \
+                           ('time','hru',), \
+                           nc_forcing_tmp[air_temperature].encoding['_FillValue'], \
+                           nc_forcing_tmp[air_temperature].values.astype(float), \
+                           nc_forcing_tmp[air_temperature].attrs['long_name'], \
+                           nc_forcing_tmp[air_temperature].attrs['units'])
+        
+        
+    # Specific humidity
+    nc_forcing_tmp = nc_forcing
+    specific_humidity = variable_mapping["specific_humidity"].get(forcing_name)   
+    if specific_humidity is None:
+        print(f"Warning: Specific humidity data not available for {forcing_name}. Using era5 instead.")
+        nc_forcing_tmp = backup_nc_forcing
+        specific_humidity = variable_mapping["specific_humidity"].get("era5")   
+
+        
+    create_and_fill_nc_var(ncid, 'spechum', \
+                           nc_forcing_tmp[specific_humidity].encoding['dtype'], \
+                           ('time','hru',), \
+                           nc_forcing_tmp[specific_humidity].encoding['_FillValue'], \
+                           nc_forcing_tmp[specific_humidity].values.astype(float), \
+                           nc_forcing_tmp[specific_humidity].attrs['long_name'], \
+                           nc_forcing_tmp[specific_humidity].attrs['units'])        
+
+
+    # Wind speed
+    nc_forcing_tmp = nc_forcing
     windspeed = variable_mapping["windspeed"].get(forcing_name)     
-    if airpres_var is not None:           
-        create_and_fill_nc_var(ncid, 'windspd', \
-                               nc_forcing[windspeed].encoding['dtype'], \
-                               ('time','hru',), \
-                               nc_forcing[windspeed].encoding['_FillValue'], \
-                               nc_forcing[windspeed].values.astype(float), \
-                               nc_forcing[windspeed].attrs['long_name'], \
-                               nc_forcing[windspeed].attrs['units'])
-    else:
-        print(f"Warning: Windspeed data not available for {forcing_name}. Skipping...")            
+    if windspeed is None:   
+        print(f"Warning: Wind speed data not available for {forcing_name}. Using era5 instead.")
+        nc_forcing_tmp = backup_nc_forcing        
+        windspeed = variable_mapping["windspeed"].get("era5")     
+
+        
+    create_and_fill_nc_var(ncid, 'windspd', \
+                           nc_forcing_tmp[windspeed].encoding['dtype'], \
+                           ('time','hru',), \
+                           nc_forcing_tmp[windspeed].encoding['_FillValue'], \
+                           nc_forcing_tmp[windspeed].values.astype(float), \
+                           nc_forcing_tmp[windspeed].attrs['long_name'], \
+                           nc_forcing_tmp[windspeed].attrs['units'])        
             
             
     # Data step Variable
