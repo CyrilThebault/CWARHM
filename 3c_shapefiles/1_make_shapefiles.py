@@ -218,6 +218,8 @@ forcing_name = read_from_control(controlFolder/controlFile,'forcing_data_name')
 forcing_path =  CAMELS_spath / 'forcing' / category_value / forcing_name / (forcing_name + '-' + spa) 
 
 forcing_file = domainName + "_" + forcing_name + "_" + spa +".nc"
+if forcing_name == "em-earth":
+    forcing_file = forcing_file.replace(forcing_name, "em_earth")
 
 nc_forcing = xr.open_dataset(forcing_path / forcing_file)
 
