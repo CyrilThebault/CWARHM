@@ -103,6 +103,7 @@ with nc4.Dataset(attribute_path/attribute_name, "r+") as att:
             else:
                 tmp_hist.append(0)
                 
+                
         # Set the '0' class to having -1 occurences -> that must make some other class the most occuring one. 
         # Using -1 also accounts for cases where SOILGRIDS has no sand/silt/clay data (oceans, glaciers, open water)
         # and returns soil class =0. In such cases we default to the soilclass with the second most occurences. If 
@@ -113,16 +114,48 @@ with nc4.Dataset(attribute_path/attribute_name, "r+") as att:
         # Note: this assumes that we have USGS_0 to USGS_12 and thus that index == soilclass. 
         tmp_sc = np.argmax(np.asarray(tmp_hist))
         
-        # Check the assumption that index == soilclass
-        if shp['USGS_' + str(tmp_sc)][shp_mask].values != tmp_hist[tmp_sc]:
+        # Check NA soil class
+        if max(tmp_hist) == 0:
+            print('NA soil class defined at HRU ' + \
+                  str(shp[intersect_hruId_var][shp_mask].values[0]))
+
+        # Check missmatch
+        elif shp['USGS_' + str(tmp_sc)][shp_mask].values != tmp_hist[tmp_sc]:
             print('Index and mode soil class do not match at hru_id ' + \
                   str(shp[intersect_hruId_var][shp_mask].values[0]))
-            tmp_sc = -999
             
-        # Replace the value
-        print('Replacing soil class {} with {} at HRU {}'.format(att['soilTypeIndex'][idx],tmp_sc,attribute_hru))
-        att['soilTypeIndex'][idx] = tmp_sc
-        
+        # Fill the soilclass
+        else:    
+            # Replace the value
+            print('Replacing soil class {} with {} at HRU {}'.format(att['soilTypeIndex'][idx],tmp_sc,attribute_hru))
+            att['soilTypeIndex'][idx] = tmp_sc
+            
+            
+    # Indices of -999 values
+    na_indices = [i for i, val in enumerate(att['soilTypeIndex'][:]) if val == -999]
+    
+    if(len(na_indices)==len(att['soilTypeIndex'][:])):
+        print("\nOnly NA were found in this catchment")
+    elif len(na_indices)>0:
+        print("\nReplacing NA values with neighbor HRU value")
+        for idx in na_indices:
+            found = False
+            for offset in range(1, len(att['soilTypeIndex'][:])):
+                left = idx - offset
+                right = idx + offset
+    
+                if left >= 0 and att['soilTypeIndex'][:][left] != -999:
+                    att['soilTypeIndex'][:][idx] = att['soilTypeIndex'][:][left]
+                    print(f"Replacing soil class -999 with {att['soilTypeIndex'][:][left]} at HRU {att['hruId'][:][idx]} (based on neighbor HRU {att['hruId'][:][left]})")
+                    found = True
+                    break
+                elif right < len(att['soilTypeIndex'][:]) and att['soilTypeIndex'][:][right] != -999:
+                    att['soilTypeIndex'][:][idx] = att['soilTypeIndex'][:][right]
+                    print(f"Replacing soil class -999 with {att['soilTypeIndex'][:][right]} at HRU {att['hruId'][:][idx]} (based on neighbor HRU {att['hruId'][:][right]})")
+                    found = True
+                    break
+    
+
         
 # --- Code provenance
 # Generates a basic log file in the domain folder and copies the control file and itself there.
