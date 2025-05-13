@@ -144,14 +144,14 @@ with nc4.Dataset(attribute_path/attribute_name, "r+") as att:
                 left = idx - offset
                 right = idx + offset
     
-                if left >= 0 and att['soilTypeIndex'][:][left] != -999:
-                    att['soilTypeIndex'][:][idx] = att['soilTypeIndex'][:][left]
-                    print(f"Replacing soil class -999 with {att['soilTypeIndex'][:][left]} at HRU {att['hruId'][:][idx]} (based on neighbor HRU {att['hruId'][:][left]})")
+                if left >= 0 and att['soilTypeIndex'][left] != -999:
+                    att['soilTypeIndex'][idx] = att['soilTypeIndex'][left]
+                    print(f"Replacing soil class -999 with {att['soilTypeIndex'][left]} at HRU {att['hruId'][idx]} (based on neighbor HRU {att['hruId'][left]})")
                     found = True
                     break
-                elif right < len(att['soilTypeIndex'][:]) and att['soilTypeIndex'][:][right] != -999:
-                    att['soilTypeIndex'][:][idx] = att['soilTypeIndex'][:][right]
-                    print(f"Replacing soil class -999 with {att['soilTypeIndex'][:][right]} at HRU {att['hruId'][:][idx]} (based on neighbor HRU {att['hruId'][:][right]})")
+                elif right < len(att['soilTypeIndex'][:]) and att['soilTypeIndex'][right] != -999:
+                    att['soilTypeIndex'][idx] = att['soilTypeIndex'][right]
+                    print(f"Replacing soil class -999 with {att['soilTypeIndex'][right]} at HRU {att['hruId'][idx]} (based on neighbor HRU {att['hruId'][right]})")
                     found = True
                     break
     
