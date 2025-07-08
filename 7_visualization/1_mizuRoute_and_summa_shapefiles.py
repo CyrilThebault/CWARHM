@@ -220,21 +220,31 @@ plt.rcParams.update({'font.size': 12})
 
 # --- mizuRoute
 axId = 1
-rm_catchment.plot(ax=axs[axId],facecolor='none',edgecolor='k',linewidth=2)
-rm_river.plot(ax=axs[axId],color=col_river,linewidth=4)
+rm_catchment.plot(ax=axs[axId], facecolor='none', edgecolor='k', linewidth=2)
 
-# custom legend
-lines = [Line2D([0], [0], color='k', lw=2),
-         Line2D([0], [0], color=col_river[1], lw=2)]
-label = ['mizuRoute HRUs',
-         'Stream segments (all non-black lines)']
-axs[axId].legend(lines,label);
+# Prepare legend elements
+lines = [Line2D([0], [0], color='k', lw=2)]
+labels = ['mizuRoute HRUs']
 
-# title
-axs[axId].set_title('(b) mizuRoute catchments and stream network');
+# Plot river if valid
+if not rm_river.empty and rm_river.geometry.notna().any():
+    rm_river_valid = rm_river[rm_river.geometry.notna() & rm_river.is_valid]
+    if not rm_river_valid.empty:
+        rm_river_valid.plot(ax=axs[axId], color=col_river, linewidth=4)
+        lines.append(Line2D([0], [0], color=col_river[1], lw=2))
+        labels.append('Stream segments (all non-black lines)')
+    else:
+        print("rm_river has no valid geometries — skipped.")
+else:
+    print("rm_river is empty or contains no geometry — skipped.")
+
+# Add legend and labels
+axs[axId].legend(lines, labels)
+axs[axId].set_title('(b) mizuRoute catchments and stream network')
 axs[axId].set_frame_on(False)
-axs[axId].set_xlabel('Longitude [degrees East]');
-axs[axId].set_ylabel('Latitude [degrees North]');
+axs[axId].set_xlabel('Longitude [degrees East]')
+axs[axId].set_ylabel('Latitude [degrees North]')
+
 
 # --- summa
 axId = 0

@@ -57,6 +57,14 @@ def make_default_path(suffix):
     
     
 # --- Find forcing location and an example file
+domainName = read_from_control(controlFolder/controlFile,'domain_name')
+
+# Spatialisation
+spa = 'distributed'
+
+# Forcing data product
+forcing_name = read_from_control(controlFolder/controlFile,'forcing_data_name')
+
 # Forcing path
 forcing_path = read_from_control(controlFolder/controlFile,'forcing_summa_path')
 
@@ -66,12 +74,11 @@ if forcing_path == 'default':
 else:
     forcing_path = Path(forcing_path) # make sure a user-specified path is a Path()
     
-# Find a list of forcing files
-_,_,forcing_files = next(os.walk(forcing_path))
 
-# Select a random file as a template for hruId order
-forcing_name = forcing_files[0]
-
+# Forcing file
+forcing_file = domainName + "_" + forcing_name + "_" + spa +".nc"
+if forcing_name == "em-earth":
+    forcing_file = forcing_file.replace(forcing_name, "em_earth")
 
 # --- Find where the trial parameter file needs to go
 # Trial parameter path & name
@@ -90,7 +97,7 @@ parameter_path.mkdir(parents=True, exist_ok=True)
 
 # --- Find order and number of HRUs in forcing file
 # Open the forcing file
-forc = xr.open_dataset(forcing_path/forcing_name)
+forc = xr.open_dataset(forcing_path/forcing_file)
 
 # Get the sorting order from the forcing file
 forcing_hruIds = forc['hruId'].values.astype(int) # 'hruId' is prescribed by SUMMA so this variable must exist

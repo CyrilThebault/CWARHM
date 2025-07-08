@@ -6,7 +6,7 @@
 # - Catchment shapefile with HRU delineation
 # - River network shapefile with stream segments
 # - SUMMA output `scalarSWE`
-# - mizuRoute output `KWTroutedRunoff`
+# - mizuRoute output `IRFroutedRunoff`
 
 # In[1]:
 
@@ -204,7 +204,7 @@ else:
 
 # Specify the variable of interest
 mizu_output_name = 'run1*.nc'
-mizu_plot_var = 'KWTroutedRunoffroutedRunoff'
+mizu_plot_var = 'IRFroutedRunoff'
 
 
 # #### Load the shape and data
@@ -404,11 +404,14 @@ cbr.ax.set_title('$[m.a.s.l.]$')
 
 # Custom legend
 lines = [Line2D([0], [0], color='k', lw=2),
-         Line2D([0], [0], color='k', lw=1),
-         Line2D([0], [0], color='r', linestyle='None', marker='.', markersize=10, lw=2)]
+         Line2D([0], [0], color='k', lw=1)#,
+         #Line2D([0], [0], color='r', linestyle='None', marker='.', markersize=10, lw=2)
+         ]
+         
 label = ['SUMMA GRUs',
-         'SUMMA HRUs',
-         'Outlet']
+         'SUMMA HRUs'#,
+         #'Outlet'
+         ]
 axs[axId].legend(lines,label,loc='lower left');
 
 # Chart junk
@@ -421,29 +424,38 @@ axs[axId].set_ylabel('Latitude [degrees North]')
 # --- mean flow
 axId = 1
 
-# Data
-shp_catchment.plot(ax=axs[axId], column='plot_var',edgecolor='k', cmap = cmap_swe, legend=False)
-hm_grus_only.plot(ax=axs[axId],facecolor='none',edgecolor='k',linewidth=2) 
-shp_river.plot(ax=axs[axId], column='plot_var', cmap=cmap_q,linewidth=5)
-# add_outlet(axs[axId],outlet_lat,outlet_lon)
+# Plot catchments
+shp_catchment.plot(ax=axs[axId], column='plot_var', edgecolor='k', cmap=cmap_swe, legend=False)
+hm_grus_only.plot(ax=axs[axId], facecolor='none', edgecolor='k', linewidth=2)
 
-# Custom colorbars
+# Plot rivers only if they have valid geometry
+if not shp_river.empty and shp_river.geometry.notna().any():
+    shp_river_valid = shp_river[shp_river.geometry.notna() & shp_river.is_valid]
+    if not shp_river_valid.empty:
+        shp_river_valid.plot(ax=axs[axId], column='plot_var', cmap=cmap_q, linewidth=5)
+
+        # Add river colorbar
+        cax = fig.add_axes([1.02, 0.1, 0.02, 0.5])
+        vmin, vmax = shp_river_valid['plot_var'].min(), shp_river_valid['plot_var'].max()
+        sm = plt.cm.ScalarMappable(cmap=cmap_q, norm=plt.Normalize(vmin=vmin, vmax=vmax))
+        sm._A = []
+        cbr = fig.colorbar(sm, cax=cax)
+        cbr.ax.set_title('[{}]'.format(units_mizu))
+    else:
+        print("shp_river has no valid geometries — skipping river plot and colorbar.")
+else:
+    print("shp_river is empty or contains no geometry — skipping river plot and colorbar.")
+
+# Catchment SWE colorbar
 cax = fig.add_axes([0.96, 0.1, 0.02, 0.5])
-vmin,vmax = shp_catchment['plot_var'].min(),shp_catchment['plot_var'].max()
+vmin, vmax = shp_catchment['plot_var'].min(), shp_catchment['plot_var'].max()
 sm = plt.cm.ScalarMappable(cmap=cmap_swe, norm=plt.Normalize(vmin=vmin, vmax=vmax))
 sm._A = []
 cbr = fig.colorbar(sm, cax=cax)
 cbr.ax.set_title('[{}]'.format(units_summa))
 
-cax = fig.add_axes([1.02, 0.1, 0.02, 0.5])
-vmin,vmax = shp_river['plot_var'].min(),shp_river['plot_var'].max()
-sm = plt.cm.ScalarMappable(cmap=cmap_q, norm=plt.Normalize(vmin=vmin, vmax=vmax))
-sm._A = []
-cbr = fig.colorbar(sm, cax=cax)
-cbr.ax.set_title('[{}]'.format(units_mizu))
-
-# Chart junk
-axs[axId].set_title('(b) Mean annual max SWE and mean annual Q');
+# Chart styling
+axs[axId].set_title('(b) Mean annual max SWE and mean annual Q')
 axs[axId].set_frame_on(False)
 axs[axId].set_xlabel('Longitude [degrees East]')
 

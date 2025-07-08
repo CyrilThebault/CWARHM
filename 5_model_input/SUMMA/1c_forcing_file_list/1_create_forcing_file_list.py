@@ -77,16 +77,22 @@ file_list_path.mkdir(parents=True, exist_ok=True)
 
 
 # --- Make the file
-# Find a list of forcing files
-_,_,forcing_files = next(os.walk(forcing_path))
+domainName = read_from_control(controlFolder/controlFile,'domain_name')
 
-# Sort this list
-forcing_files.sort()
+# Spatialisation
+spa = 'distributed'
+
+# Forcing data product
+forcing_name = read_from_control(controlFolder/controlFile,'forcing_data_name')
+    
+# Forcing file
+forcing_file = domainName + "_" + forcing_name + "_" + spa +".nc"
+if forcing_name == "em-earth":
+    forcing_file = forcing_file.replace(forcing_name, "em_earth")
 
 # Create the file list
 with open(file_list_path / file_list_name, 'w') as f:
-    for file in forcing_files:
-        f.write(str(file) + "\n")
+    f.write(forcing_file)
         
         
 # --- Code provenance
