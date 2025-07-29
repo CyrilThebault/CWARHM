@@ -7,10 +7,9 @@ from pathlib import Path
 from shutil import copyfile
 from datetime import datetime
 import geopandas as gpd
-import rasterio
-from rasterstats import zonal_stats
 import pandas as pd
 import numpy as np
+from exactextract import exact_extract
 
 
 # --- Control file handling
@@ -95,29 +94,40 @@ intersect_path.mkdir(parents=True, exist_ok=True)
 # --- Rasterstats analysis
 # Load the shapefile
 gdf = gpd.read_file(catchment_path / catchment_name)
+raster_path = soil_path / soil_name
 
-# Open the raster file
-with rasterio.open(soil_path / soil_name) as src:
-    affine = src.transform
-    array = src.read(1)  # Read the first band
+# Perform exactextract with fractional coverage per class
+stats = exact_extract(
+    str(raster_path),
+    gdf,
+    ["unique", "frac"],
+    output='pandas'
+)
 
-# Get unique values in the raster
-unique_values = np.unique(array).astype(int)
-unique_values = unique_values[unique_values != src.nodata]  # Remove nodata value if present
+# Build a list of row-wise dicts: {soil_class: fraction}
+rows = []
+for i, (classes, fractions) in stats.iterrows():
+    row_dict = {k: v for k, v in zip(classes, fractions)}
+    rows.append(row_dict)
 
-# Perform zonal statistics for each unique value
-results = []
-for value in unique_values:
-    category_stats = zonal_stats(gdf, array, affine=affine, stats=['count'], categorical=True, 
-                                 category_map={value: 1})
-    counts = [stat.get(1, 0) for stat in category_stats]  # Get count for category 1, default to 0 if not present
-    results.append(pd.DataFrame(counts, columns=[f'USGS_{value}']))
+# Convert to DataFrame
+df_stats = pd.DataFrame(rows)
 
-# Combine all results
-hist_df = pd.concat(results, axis=1).fillna(0).astype(int)
+# Replace NaN with 0, ensure float type
+df_stats = df_stats.fillna(0).astype(float)
 
-# Combine the original GeoDataFrame with the histogram results
-result = gdf.join(hist_df)
+# Sort columns numerically
+sorted_columns = sorted(df_stats.columns, key=lambda x: int(x))
+df_stats = df_stats[sorted_columns]
+
+# Round to 4 digit
+df_stats = df_stats.round(4)
+
+# Rename columns to USGS soil class format
+df_stats.columns = [f'USGS_{int(col)}' for col in df_stats.columns]
+
+# Merge with original GeoDataFrame
+result = gdf.join(df_stats)
 
 # Save the result
 result.to_file(intersect_path / intersect_name)

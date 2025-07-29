@@ -7,9 +7,8 @@ from pathlib import Path
 from shutil import copyfile
 from datetime import datetime
 import geopandas as gpd
-import rasterio
-from rasterstats import zonal_stats
 import pandas as pd
+from exactextract import exact_extract
 
 
 # --- Control file handling
@@ -94,18 +93,27 @@ intersect_path.mkdir(parents=True, exist_ok=True)
 # --- Rasterstats analysis
 # Load the shapefile
 gdf = gpd.read_file(catchment_path / catchment_name)
+raster_path = land_path / land_name
 
-# Open the raster file
-with rasterio.open(land_path / land_name) as src:
-    affine = src.transform
-    array = src.read(1)
-    nodata = src.nodata
 
 # Perform zonal statistics
-stats = zonal_stats(gdf, array, affine=affine, nodata=nodata, categorical=True)
+stats = exact_extract(
+    str(raster_path),
+    gdf,
+    ["unique", "frac"],
+    output='pandas'
+)
 
-# Convert stats to DataFrame
-df_stats = pd.DataFrame(stats)
+
+# Initialize list to store per-row dicts
+rows = []
+
+for i, (classes, fractions) in stats.iterrows():
+    row_dict = {k: v for k, v in zip(classes, fractions)}
+    rows.append(row_dict)
+
+# Convert list of dicts to DataFrame
+df_stats = pd.DataFrame(rows)
 
 # Convert column names to integers and sort them
 sorted_columns = sorted(df_stats.columns, key=lambda x: int(x))
@@ -113,8 +121,11 @@ sorted_columns = sorted(df_stats.columns, key=lambda x: int(x))
 # Reorder DataFrame based on sorted column names
 df_stats = df_stats[sorted_columns]
 
-# Replace NaN with 0 and convert to integers
-df_stats = df_stats.fillna(0).astype(int)
+# Replace NaN with 0 and convert to float
+df_stats = df_stats.fillna(0).astype(float)
+
+# Round to 4 digit
+df_stats = df_stats.round(4)
 
 # Rename columns
 df_stats.columns = [f'IGBP_{int(col)}' for col in df_stats.columns]

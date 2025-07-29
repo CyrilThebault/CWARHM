@@ -1,5 +1,6 @@
 cdsapi==0.2.4
 easymore==0.0.3
+exactextract==0.2.2
 GDAL==3.0.4
 geopandas==0.10.2
 hs_restclient==1.3.7
