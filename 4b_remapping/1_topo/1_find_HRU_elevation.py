@@ -9,11 +9,10 @@
 # modules
 import os
 import geopandas as gpd
-from rasterstats import zonal_stats
 from pathlib import Path
 from shutil import copyfile
 from datetime import datetime
-
+from exactextract import exact_extract
 
 # --- Control file handling
 # Easy access to control file folder
@@ -113,16 +112,14 @@ for file in os.listdir(catchment_path):
         
 # --- Rasterstats analysis
 # Load the shapefile
-gdf = gpd.read_file(str(intersect_path/intersect_name))
+gdf = gpd.read_file(intersect_path / intersect_name)
+raster_path = dem_path / dem_name
 
 # Calculate zonal statistics
-stats = zonal_stats(gdf, 
-                    str(dem_path/dem_name), 
-                    stats=['mean'], 
-                    all_touched=True)
+elev_means = exact_extract(str(raster_path), gdf, 'mean', output='pandas')
 
 # Add the mean elevation to the GeoDataFrame
-gdf['elev_mean'] = [stat['mean'] for stat in stats]
+gdf['elev_mean'] = elev_means
 
 # Save the updated GeoDataFrame
 gdf.to_file(str(intersect_path/intersect_name))
